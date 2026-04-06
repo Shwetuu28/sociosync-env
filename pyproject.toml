@@ -1,0 +1,14 @@
+[project]
+name = "sociosync-env"
+version = "0.1.0"
+description = "SocioSync OpenEnv Environment"
+authors = [{ name = "Shweta" }]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
