@@ -22,3 +22,9 @@ def step(action: dict):
         "done": done,
         "info": {}
     }
+
+def main():
+    return app
+
+if __name__ == "__main__":
+    main()
