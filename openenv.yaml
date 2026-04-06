@@ -1,0 +1,38 @@
+name: sociosync-env
+description: Workforce optimization RL environment with delayed effects and policy decisions
+
+observation_space:
+  type: object
+  properties:
+    low_skill:
+      type: float
+    mid_skill:
+      type: float
+    high_skill:
+      type: float
+    unemployment_rate:
+      type: float
+    economic_growth:
+      type: float
+    inequality:
+      type: float
+    budget:
+      type: float
+    learning_efficiency:
+      type: float
+    project_exposure:
+      type: float
+    open_jobs:
+      type: integer
+
+action_space:
+  type: object
+  properties:
+    action_type:
+      type: string
+      enum:
+        - education_policy
+        - hiring_policy
+        - economic_policy
+    intensity:
+      type: float
