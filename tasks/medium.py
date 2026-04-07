@@ -32,4 +32,7 @@ def run_medium_task():
 
     score = 0.6 * employment + 0.4 * skill_alignment
 
-    return min(score, 1.0)
+    return {
+        "success": True,
+        "score": score
+    }

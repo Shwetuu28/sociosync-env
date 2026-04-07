@@ -38,4 +38,7 @@ def run_hard_task():
             break
 
     score = grade_environment(env)
-    return score
+    return {
+        "success": True,
+        "score": score
+    }
