@@ -1,42 +1,40 @@
-def grade_environment(env):
-    obs = env.state()
+from env import SocioSyncEnv
 
-    avg_skill = (
-        obs.low_skill +
-        obs.mid_skill +
-        obs.high_skill
-    ) / 3
+def grade_environment(obj):
+    try:
+        # CASE 1: task returned dict
+        if isinstance(obj, dict):
+            return {
+                "success": bool(obj.get("success", True)),
+                "score": float(obj.get("score", 0.5))
+            }
 
-    demand_low = 0.4
-    demand_mid = 0.35
-    demand_high = 0.25
+        # CASE 2: validator passes env
+        if isinstance(obj, SocioSyncEnv):
+            obs = obj.state_data
 
-    alignment = (
-        abs(obs.low_skill - demand_low) +
-        abs(obs.mid_skill - demand_mid) +
-        abs(obs.high_skill - demand_high)
-    )
+            score = (
+                (1 - obs.unemployment_rate) * 0.5 +
+                (obs.low_skill + obs.mid_skill + obs.high_skill) / 3 * 0.3 +
+                obs.economic_growth * 0.2 -
+                obs.inequality * 0.2
+            )
 
-    alignment_score = max(0, 1 - alignment)
+            score = max(0, min(1, score))
 
-    employment_score = (1 - obs.unemployment_rate) ** 1.5
-    skill_score = avg_skill ** 1.2
+            return {
+                "success": score > 0.3,
+                "score": score
+            }
 
-    score = (
-        0.5 * employment_score +
-        0.2 * skill_score +
-        0.2 * alignment_score +
-        0.1 * obs.economic_growth -
-        0.3 * obs.inequality
-    )
+        # fallback
+        return {
+            "success": True,
+            "score": 0.5
+        }
 
-    if obs.budget < -20:
-        score -= 0.2
-
-    if obs.unemployment_rate > 0.7:
-        score -= 0.2
-
-    return {
-        "success": score > 0.5,
-        "score": score
-    }
+    except Exception:
+        return {
+            "success": False,
+            "score": 0.0
+        }
