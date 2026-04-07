@@ -36,4 +36,7 @@ def grade_environment(env):
     if obs.unemployment_rate > 0.7:
         score -= 0.2
 
-    return max(0, min(score, 1))
+    return {
+        "success": score > 0.5,
+        "score": score
+    }

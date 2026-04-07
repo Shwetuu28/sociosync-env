@@ -102,10 +102,10 @@ def run():
         )
         
     finally:
-        score = grade_environment(env)
-        score = max(0, min(score, 1))
+        result = grade_environment(env)
 
-        success = score >= 0.5
+        score = max(0, min(result["score"], 1))
+        success = result["success"]
 
         try:
             env.close()

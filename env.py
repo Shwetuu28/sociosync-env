@@ -4,9 +4,10 @@ import random
 
 
 class SocioSyncEnv:
-    def __init__(self,seed=42):
+    def __init__(self,seed=42, mode="easy"):
         self.seed = seed
         self.rng = random.Random(seed)
+        self.mode = mode
         self.current_step = 0
         self.max_steps = 50
         self.learning_queue = []  # 🔥 delayed effects
@@ -14,20 +15,29 @@ class SocioSyncEnv:
         self.state_data = None
 
     def reset(self) -> Observation:
-        self.current_step = 0
-        self.learning_queue = []
+        if self.mode == "easy":
+            unemployment = self.rng.uniform(0.2, 0.3)
+            budget = 120
+
+        elif self.mode == "medium":
+            unemployment = self.rng.uniform(0.3, 0.5)
+            budget = 100
+
+        elif self.mode == "hard":
+            unemployment = self.rng.uniform(0.4, 0.6)
+            budget = 80
 
         self.state_data = Observation(
             low_skill=self.rng.uniform(0.4, 0.6),
             mid_skill=self.rng.uniform(0.2, 0.4),
             high_skill=self.rng.uniform(0.1, 0.3),
-            unemployment_rate=self.rng.uniform(0.3, 0.5),
+            unemployment_rate=unemployment,
             learning_efficiency=0.5,
             project_exposure=0.1,
             open_jobs=50,
             economic_growth=0.2,
             inequality=0.5,
-            budget=100
+            budget=budget
         )
 
         return self.state_data
