@@ -36,3 +36,16 @@ action_space:
         - economic_policy
     intensity:
       type: float
+
+tasks:
+  - name: easy
+    entry_point: easy:run_easy_task
+    grader: grader:grade_environment
+
+  - name: medium
+    entry_point: medium:run_medium_task
+    grader: grader:grade_environment
+
+  - name: hard
+    entry_point: hard:run_hard_task
+    grader: grader:grade_environment

@@ -1,9 +1,12 @@
-FROM python:3.10
+FROM python:3.10-slim-bullseye
 
 WORKDIR /app
 
+COPY requirements.txt .
+COPY packages ./packages
+
+RUN pip install --no-cache-dir --no-index --find-links=packages -r requirements.txt
+
 COPY . .
 
-RUN pip install --no-cache-dir -r requirements.txt
-
-CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["python", "inference.py"]
