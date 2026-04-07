@@ -1,26 +1,30 @@
 from fastapi import FastAPI
-from sociosync_env import SocioSyncEnv
-from pydantic import BaseModel
+from env import SocioSyncEnv
+from models import Action
 
 app = FastAPI()
 
 env = SocioSyncEnv()
 
-class ActionInput(BaseModel):
-    action_type: str
-    intensity: float
-
 @app.post("/reset")
 def reset():
     obs = env.reset()
-    return {"observation": obs.__dict__}
+    return obs.dict()
 
 @app.post("/step")
-def step(action: ActionInput):
-    obs, reward, done, info = env.step(action)
+def step(action: dict):
+    act = Action(**action)
+    obs, reward, done, _ = env.step(act)
+
     return {
-        "observation": obs.__dict__,
+        "observation": obs.dict(),
         "reward": reward,
         "done": done,
-        "info": info
+        "info": {}
     }
+
+def main():
+    return app
+
+if __name__ == "__main__":
+    main()
