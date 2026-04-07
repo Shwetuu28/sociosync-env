@@ -9,7 +9,7 @@ env = SocioSyncEnv()
 @app.post("/reset")
 def reset():
     obs = env.reset()
-    return obs.dict()
+    return obs.__dict__
 
 @app.post("/step")
 def step(action: dict):
@@ -17,7 +17,7 @@ def step(action: dict):
     obs, reward, done, _ = env.step(act)
 
     return {
-        "observation": obs.dict(),
+        "observation": obs.__dict__,
         "reward": reward,
         "done": done,
         "info": {}

@@ -1,10 +1,14 @@
-from env import SocioSyncEnv
-from models import Action
-from grader import grade_environment
 import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from env import SocioSyncEnv
+from models import Action
+from grader import grade_environment
+
+__all__ = ["easy", "medium", "hard"]
+
 
 def run_task(mode):
     env = SocioSyncEnv(mode=mode, seed=42)
@@ -20,7 +24,13 @@ def run_task(mode):
         if done:
             break
 
-    return grade_environment(env)
+    result = grade_environment(env)
+
+    # 🔥 STRICT FORMAT (VERY IMPORTANT)
+    return {
+        "success": bool(result["success"]),
+        "score": float(result["score"])
+    }
 
 
 def easy():
