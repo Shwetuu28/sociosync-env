@@ -6,27 +6,15 @@ from grader import grade_environment
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
-HF_TOKEN = os.getenv("HF_TOKEN")
+API_KEY = os.getenv("API_KEY")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
-USE_LLM = HF_TOKEN is not None
-
-if not USE_LLM:
-    print("[WARNING] HF_TOKEN missing, using fallback policy")
-
-client = None
-if USE_LLM:
-    try:
-        client = OpenAI(
-            base_url=API_BASE_URL,
-            api_key=HF_TOKEN
-        )
-    except Exception:
-        USE_LLM = False
-
+client = OpenAI(
+    base_url=API_BASE_URL,
+    api_key=API_KEY
+)
 
 def choose_action(obs):
-    if USE_LLM:
         try:
             response = client.chat.completions.create(
                 model=MODEL_NAME,
@@ -54,12 +42,10 @@ Return JSON: {{"action_type": "...", "intensity": 0.5}}
             )
 
         except Exception:
-            pass  
-
-    if obs.unemployment_rate > 0.3:
-        return Action(action_type="education_policy", intensity=0.7)
-    else:
-        return Action(action_type="hiring_policy", intensity=0.5)
+            if obs.unemployment_rate > 0.3:
+                return Action(action_type="education_policy", intensity=0.7)    
+            else:
+                return Action(action_type="hiring_policy", intensity=0.5)
 
 
 def run():
