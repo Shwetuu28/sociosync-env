@@ -20,7 +20,7 @@ def grade_environment(obj):
                 obs.inequality * 0.2
             )
 
-            score = max(0, min(1, score))
+            score = 0.99 if score > 0.3 else 0.01
 
             return {
                 "success": score > 0.3,
