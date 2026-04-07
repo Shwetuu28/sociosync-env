@@ -1,3 +1,4 @@
+import asyncio
 import os
 from openai import OpenAI
 from env import SocioSyncEnv
@@ -6,29 +7,25 @@ from grader import grade_environment
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
-API_KEY = os.getenv("API_KEY")
-LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
+API_KEY = os.getenv("HF_TOKEN")
+IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
-client = None
+if not API_KEY:
+    raise ValueError("HF_TOKEN is required")
 
-if API_KEY:
-    try:
-        client = OpenAI(
-            base_url=API_BASE_URL,
-            api_key=API_KEY
-        )
-    except Exception:
-        client = None
+client = OpenAI(
+    base_url=API_BASE_URL,
+    api_key=API_KEY
+)
+
 
 def choose_action(obs):
-    # 👉 USE LLM if available
-    if client:
-        try:
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=[{
-                    "role": "user",
-                    "content": f"""
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{
+                "role": "user",
+                "content": f"""
 State:
 unemployment: {obs.unemployment_rate}
 budget: {obs.budget}
@@ -36,89 +33,71 @@ budget: {obs.budget}
 Choose action: education_policy, hiring_policy, economic_policy
 Return JSON: {{"action_type": "...", "intensity": 0.5}}
 """
-                }],
-                temperature=0
-            )
+            }],
+            temperature=0
+        )
 
-            import json
-            parsed = json.loads(response.choices[0].message.content)
+        import json
+        parsed = json.loads(response.choices[0].message.content)
 
-            return Action(
-                action_type=parsed["action_type"],
-                intensity=float(parsed["intensity"])
-            )
+        return Action(
+            action_type=parsed["action_type"],
+            intensity=float(parsed["intensity"])
+        )
 
-        except Exception:
-            pass  
-
-    if obs.unemployment_rate > 0.3:
-        return Action(action_type="education_policy", intensity=0.7)
-    else:
-        return Action(action_type="hiring_policy", intensity=0.5)
+    except Exception:
+        return Action("hiring_policy", 0.5)
 
 
-def run():
-    if LOCAL_IMAGE_NAME:
-        try:
-            env = SocioSyncEnv.from_docker_image(LOCAL_IMAGE_NAME)
-        except:
-            env = SocioSyncEnv()
-    else:
-        env = SocioSyncEnv()
+async def run_task(task_name):
+    env = await SocioSyncEnv.from_docker_image(IMAGE_NAME)
 
-    obs = env.reset()
+    result = await env.reset()
 
     rewards = []
-    success = True
-    step = 0
+    steps = 0
 
-    print(f"[START] task=hard env=sociosync-env model={MODEL_NAME}")
+    print(f"[START] task={task_name} env=sociosync-env model={MODEL_NAME}")
 
     try:
         for step in range(1, 51):
-            action = choose_action(obs)
+            action = choose_action(result.observation)
 
-            obs, reward, done, _ = env.step(action)
+            result = await env.step(action)
 
-            rewards.append(round(reward, 2))
+            reward = result.reward or 0.0
+            done = result.done
+
+            rewards.append(reward)
+            steps = step
 
             action_str = f"{action.action_type}({action.intensity:.2f})"
 
-            error_msg = "null"
-
             print(
-                f"[STEP] step={step} action={action_str} reward={reward:.2f} done={str(done).lower()} error={error_msg}"
+                f"[STEP] step={step} action={action_str} reward={reward:.2f} done={str(done).lower()} error=null"
             )
 
             if done:
                 break
 
     except Exception as e:
-        success = False
-        error_msg = str(e)
+        print(f"[STEP] step={steps} action=none reward=0.00 done=true error={str(e)}")
 
-        print(
-            f"[STEP] step={step} action=none reward=0.00 done=true error={error_msg}"
-        )
-        
     finally:
-        result = grade_environment(env)
+        score = min(max(sum(rewards) / (len(rewards) + 1e-6), 0.0), 1.0)
+        success = score > 0.3
 
-        score = max(0, min(result["score"], 1))
-        success = result["success"]
-
-        try:
-            env.close()
-        except:
-            pass
+        await env.close()
 
         print(
-            f"[END] success={str(success).lower()} "
-            f"steps={step} "
-            f"score={score:.2f} "
-            f"rewards={','.join([f'{r:.2f}' for r in rewards])}"
+            f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={','.join([f'{r:.2f}' for r in rewards])}"
         )
+
+
+async def main():
+    for task in ["easy", "medium", "hard"]:
+        await run_task(task)
 
 
 if __name__ == "__main__":
-    run()
+    asyncio.run(main())
