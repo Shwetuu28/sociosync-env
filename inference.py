@@ -9,12 +9,20 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 API_KEY = os.getenv("API_KEY")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
-client = OpenAI(
-    base_url=API_BASE_URL,
-    api_key=API_KEY
-)
+client = None
+
+if API_KEY:
+    try:
+        client = OpenAI(
+            base_url=API_BASE_URL,
+            api_key=API_KEY
+        )
+    except Exception:
+        client = None
 
 def choose_action(obs):
+    # 👉 USE LLM if available
+    if client:
         try:
             response = client.chat.completions.create(
                 model=MODEL_NAME,
@@ -33,8 +41,7 @@ Return JSON: {{"action_type": "...", "intensity": 0.5}}
             )
 
             import json
-            text = response.choices[0].message.content
-            parsed = json.loads(text)
+            parsed = json.loads(response.choices[0].message.content)
 
             return Action(
                 action_type=parsed["action_type"],
@@ -42,10 +49,12 @@ Return JSON: {{"action_type": "...", "intensity": 0.5}}
             )
 
         except Exception:
-            if obs.unemployment_rate > 0.3:
-                return Action(action_type="education_policy", intensity=0.7)    
-            else:
-                return Action(action_type="hiring_policy", intensity=0.5)
+            pass  
+
+    if obs.unemployment_rate > 0.3:
+        return Action(action_type="education_policy", intensity=0.7)
+    else:
+        return Action(action_type="hiring_policy", intensity=0.5)
 
 
 def run():
