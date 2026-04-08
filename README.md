@@ -232,7 +232,6 @@ python inference.py
 ## 🚀 Local Setup
  
 ```bash
-<<<<<<< HEAD
 # Clone the repo
 git clone https://huggingface.co/spaces/<your-username>/rescuenet-env
 cd rescuenet-env
@@ -245,12 +244,6 @@ python app.py
  
 # Or run inference directly
 python inference.py
-=======
-API_BASE_URL=https://api.openai.com/v1
-MODEL_NAME=gpt-4o-mini
-API_KEY=your_api_key
-LOCAL_IMAGE_NAME=optional_docker_image
->>>>>>> e0ae444 (Fix: add tasks with graders in openenv.yaml)
 ```
  
 ---
