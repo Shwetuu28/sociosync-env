@@ -1,40 +1,43 @@
-from env import SocioSyncEnv
+# grader.py
 
-def grade_environment(obj):
-    try:
-        # CASE 1: task returned dict
-        if isinstance(obj, dict):
-            return {
-                "success": bool(obj.get("success", True)),
-                "score": float(obj.get("score", 0.5))
-            }
+EPS_MIN = 0.01
+EPS_MAX = 0.99
 
-        # CASE 2: validator passes env
-        if isinstance(obj, SocioSyncEnv):
-            obs = obj.state_data
 
-            score = (
-                (1 - obs.unemployment_rate) * 0.5 +
-                (obs.low_skill + obs.mid_skill + obs.high_skill) / 3 * 0.3 +
-                obs.economic_growth * 0.2 -
-                obs.inequality * 0.2
-            )
+def safe_div(a, b):
+    return a / b if b > 0 else EPS_MIN
 
-            score = 0.99 if score > 0.3 else 0.01
 
-            return {
-                "success": score > 0.3,
-                "score": score
-            }
+def clamp(x):
+    return max(EPS_MIN, min(x, EPS_MAX))
 
-        # fallback
-        return {
-            "success": True,
-            "score": 0.5
-        }
 
-    except Exception:
-        return {
-            "success": False,
-            "score": 0.0
-        }
+def grade_environment(env):
+    # -----------------------------
+    # METRICS
+    # -----------------------------
+
+    survival_rate = safe_div(env.total_survived, env.total_population)
+
+    efficiency = safe_div(env.tasks_completed, env.max_steps)
+
+    utilization = safe_div(env.used_resources, env.total_resources)
+
+    cost = clamp(env.total_cost)
+
+    # -----------------------------
+    # FINAL SCORE
+    # -----------------------------
+    score = (
+        0.5 * survival_rate +
+        0.2 * efficiency +
+        0.2 * utilization -
+        0.1 * cost
+    )
+
+    score = clamp(score)
+
+    return {
+        "score": score,
+        "success": score > 0.6
+    }

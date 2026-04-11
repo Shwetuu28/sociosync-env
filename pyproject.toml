@@ -1,14 +1,14 @@
 [project]
-name = "sociosync-env"
+name = "rescuenet-env"
 version = "0.1.0"
-description = "SocioSync OpenEnv Environment"
+description = "Disaster response resource allocation RL environment (RescueNet)"
 authors = [{ name = "Shweta" }]
 
 dependencies = [
     "fastapi",
     "uvicorn",
-    "pydantic",
-    "openenv-core>=0.2.0"
+    "openenv-core>=0.2.0",
+    "openai"
 ]
 
 [project.scripts]

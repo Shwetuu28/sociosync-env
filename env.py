@@ -1,217 +1,166 @@
-from models import Observation, Action
-from typing import List
+import math
 import random
+from models import Observation, Region
 
-
-class SocioSyncEnv:
-    def __init__(self,seed=42, mode="easy"):
-        self.seed = seed
-        self.rng = random.Random(seed)
+class RescueNetEnv:
+    def __init__(self, mode="easy"):
         self.mode = mode
+
+        self.severity_multiplier = 1.0
+
+        # CONFIG
+        self.max_steps = 20
         self.current_step = 0
-        self.max_steps = 50
-        self.learning_queue = []  # 🔥 delayed effects
 
-        self.state_data = None
+        self.num_regions = {
+            "easy": 5,
+            "medium": 7,
+            "hard": 10
+        }.get(mode, 5)
 
-    def reset(self) -> Observation:
-        if self.mode == "easy":
-            unemployment = self.rng.uniform(0.2, 0.3)
-            budget = 120
+        self.reset()
 
-        elif self.mode == "medium":
-            unemployment = self.rng.uniform(0.3, 0.5)
-            budget = 100
+    # -----------------------------
+    # RESET
+    # -----------------------------
+    def reset(self, seed=None):
+        if seed is not None:
+            random.seed(seed)
 
-        elif self.mode == "hard":
-            unemployment = self.rng.uniform(0.4, 0.6)
-            budget = 80
+        self.current_step = 0
 
-        self.state_data = Observation(
-            low_skill=self.rng.uniform(0.4, 0.6),
-            mid_skill=self.rng.uniform(0.2, 0.4),
-            high_skill=self.rng.uniform(0.1, 0.3),
-            unemployment_rate=unemployment,
-            learning_efficiency=0.5,
-            project_exposure=0.1,
-            open_jobs=50,
-            economic_growth=0.2,
-            inequality=0.5,
-            budget=budget
-        )
+        self.regions = []
+        self.total_population = 0
+        self.total_survived = 0
 
-        return self.state_data
+        for _ in range(self.num_regions):
+            population = random.randint(50, 200)
+            severity = round(random.uniform(0.1, 1.0) * self.severity_multiplier, 2)
 
-    def state(self) -> Observation:
-        obs = self.state_data
-
-        return Observation(
-            low_skill=obs.low_skill,
-            mid_skill=obs.mid_skill,
-            high_skill=obs.high_skill,
-
-            unemployment_rate=max(0, min(1, obs.unemployment_rate + self.rng.uniform(-0.02, 0.02))),
-            learning_efficiency=obs.learning_efficiency,
-            project_exposure=obs.project_exposure,
-            open_jobs=obs.open_jobs,
-
-            economic_growth=obs.economic_growth,
-            inequality=max(0, min(1, obs.inequality + self.rng.uniform(-0.02, 0.02))),
-            budget=obs.budget
-        )
-    
-    def step(self, action: Action):
-        self.current_step += 1
-
-        new_queue = []
-        for item in self.learning_queue:
-            item["delay"] -= 1
-            if item["delay"] <= 0:
-                # 🎓 Education pipeline with diminishing returns
-                flow_low_to_mid = 0.2 * self.state_data.low_skill * item["effect"]
-                flow_mid_to_high = 0.1 * self.state_data.mid_skill * item["effect"]
-
-                self.state_data.low_skill += 0.5 * item["effect"] * (1 - self.state_data.low_skill)
-                self.state_data.mid_skill += 0.3 * item["effect"] * (1 - self.state_data.mid_skill)
-                self.state_data.high_skill += 0.2 * item["effect"] * (1 - self.state_data.high_skill)
-
-                # pipeline flow
-                self.state_data.low_skill -= flow_low_to_mid
-                self.state_data.mid_skill += flow_low_to_mid
-
-                self.state_data.mid_skill -= flow_mid_to_high
-                self.state_data.high_skill += flow_mid_to_high
-            else:
-                new_queue.append(item)
-        self.learning_queue = new_queue
-
-        self.state_data.low_skill = max(0, min(1, self.state_data.low_skill))
-        self.state_data.mid_skill = max(0, min(1, self.state_data.mid_skill))
-        self.state_data.high_skill = max(0, min(1, self.state_data.high_skill))
-
-        if action.action_type == "education_policy":
-            skill_gain = 0.05 * action.intensity * self.state_data.learning_efficiency
-
-            self.learning_queue.append({
-                "effect": skill_gain,
-                "delay": self.rng.choice([2, 3, 4, 5])
+            self.regions.append({
+                "population": population,
+                "severity": severity,
+                "delay": 1,
+                "resource_need": [1.0, 1.0, 1.0],  # food, medical, rescue
+                "alive": population
             })
 
-            self.state_data.project_exposure += 0.1 * action.intensity
-            self.state_data.budget -= 10 * action.intensity
+            self.total_population += population
 
-        elif action.action_type == "hiring_policy":
-            self.state_data.open_jobs += int(20 * action.intensity)
-            self.state_data.budget -= 15 * action.intensity
+        self.available_resources = [10.0, 10.0, 10.0]  # [food, medical, rescue]
+        self.used_resources = 0
+        self.total_resources = sum(self.available_resources)
 
-        elif action.action_type == "economic_policy":
-            self.state_data.learning_efficiency += 0.02 * action.intensity
-            self.state_data.budget -= 20 * action.intensity
+        self.tasks_completed = 0
+        self.total_cost = 0
 
-        demand_low = 0.4 + self.rng.uniform(-0.05, 0.05)
-        demand_mid = 0.35 + self.rng.uniform(-0.05, 0.05)
-        demand_high = 0.25 + self.rng.uniform(-0.05, 0.05)
+        return self._get_obs()
 
-        total_demand = demand_low + demand_mid + demand_high
-        demand_low /= total_demand
-        demand_mid /= total_demand
-        demand_high /= total_demand
+    # -----------------------------
+    # STEP
+    # -----------------------------
+    def step(self, action):
+        self.current_step += 1
 
-        if self.state_data.budget < 30:
-            self.state_data.learning_efficiency *= 0.97
+        region_id = action.region_id
+        resource_map = {"food": 0, "medical": 1, "rescue": 2}
 
+        if region_id >= len(self.regions):
+            return self._get_obs(), -0.1, False, {"error": "invalid_region"}
 
-        demand_low = 0.4
-        demand_mid = 0.35
-        demand_high = 0.25
+        resource_idx = resource_map.get(action.resource_type, 0)
+        quantity = max(0.0, min(action.quantity, 2.0))
 
-        alignment = (
-            abs(self.state_data.low_skill - demand_low) +
-            abs(self.state_data.mid_skill - demand_mid) +
-            abs(self.state_data.high_skill - demand_high)
-        )
+        region = self.regions[region_id]
 
-        alignment_score = max(0, 1 - alignment)
+        # Apply resource if available
+        if self.available_resources[resource_idx] >= quantity:
+            self.available_resources[resource_idx] -= quantity
+            self.used_resources += quantity
+            region["delay"] = max(1, region["delay"] - 1)
+            self.tasks_completed += 1
+        else:
+            self.total_cost += 0.05  # penalty for invalid allocation
 
-        employment_gain = min(
-            alignment_score,
-            self.state_data.open_jobs / 100
-        )
+        # -----------------------------
+        # SURVIVAL MODEL
+        # -----------------------------
+        step_survival = 0
 
-        self.state_data.unemployment_rate -= 0.05 * employment_gain
-        self.state_data.unemployment_rate = max(0, min(1, self.state_data.unemployment_rate))
-        self.state_data.inequality = max(0, min(1, self.state_data.inequality))
+        for r in self.regions:
+            S = r["severity"]
+            D = r["delay"]
+            P = r["alive"]
 
-        self.state_data.economic_growth += 0.02 * employment_gain
-        self.state_data.inequality += 0.01 * (1 - employment_gain)
+            survival_prob = math.exp(-S * D)
+            survived = P * survival_prob
 
-        reward = self.compute_reward()
+            # deaths this step
+            deaths = P - survived
 
-        done = False
+            r["alive"] = survived
+            r["delay"] += 1
 
-        if self.current_step >= self.max_steps:
-            done = True
+            step_survival += survived
 
-        if self.state_data.budget < -50:
-            reward -= 1
-            done = True
+        # -----------------------------
+        # REWARD
+        # -----------------------------
+        delta_survival = step_survival - self.total_survived
+        self.total_survived = step_survival
 
-        if self.state_data.unemployment_rate > 0.8:
-            reward -= 1
-            done = True
-
-        job_noise = self.rng.uniform(-2, 2)
-        self.state_data.open_jobs = max(0, int(self.state_data.open_jobs + job_noise))
-
-        return self.state_data, reward, done, {}  
-        
-    
-    def compute_reward(self):
-        obs = self.state_data
-
-        avg_skill = (
-            obs.low_skill +
-            obs.mid_skill +
-            obs.high_skill
-        ) / 3
-
-        demand_low = 0.4
-        demand_mid = 0.35
-        demand_high = 0.25
-
-        alignment = (
-            abs(obs.low_skill - demand_low) +
-            abs(obs.mid_skill - demand_mid) +
-            abs(obs.high_skill - demand_high)
-        )
-
-        alignment_score = max(0, 1 - alignment)
-
-        employment_score = (1 - obs.unemployment_rate) ** 1.5
-        skill_score = avg_skill ** 1.2
+        unused_resources = sum(self.available_resources)
 
         reward = (
-            0.5 * employment_score +
-            0.2 * skill_score +
-            0.2 * alignment_score +
-            0.1 * obs.economic_growth -
-            0.2 * obs.inequality
+            delta_survival / self.total_population
+            - 0.05 * unused_resources / (self.total_resources + 1e-6)
         )
 
-        if obs.budget < 0:
-            reward -= 0.2 + 0.01 * abs(obs.budget)
+        # clamp reward (safe for validator)
+        reward = max(-1.0, min(reward, 1.0))
 
-        if obs.unemployment_rate > 0.6:
-            reward -= 0.1
+        # -----------------------------
+        # DONE CONDITION
+        # -----------------------------
+        done = self.current_step >= self.max_steps
 
-        if hasattr(self, "prev_unemployment"):
-            change = abs(obs.unemployment_rate - self.prev_unemployment)
-            reward -= 0.05 * change  # penalize volatility
+        return self._get_obs(), reward, done, {}
 
-        self.prev_unemployment = obs.unemployment_rate
+    # -----------------------------
+    # STATE (REQUIRED)
+    # -----------------------------
+    def state(self):
+        return {
+            "regions": self.regions,
+            "resources": self.available_resources,
+            "step": self.current_step
+        }
 
-        return reward
-    
+    # -----------------------------
+    # OBSERVATION
+    # -----------------------------
+    def _get_obs(self):
+        region_objs = []
+
+        for r in self.regions:
+            region_objs.append(
+                Region(
+                    population=r["population"],
+                    severity=r["severity"],
+                    delay=r["delay"],
+                    resource_need=r["resource_need"],
+                    alive=r["alive"]
+                )
+            )
+
+        return Observation(
+            regions=region_objs,
+            available_resources=self.available_resources,
+            time_step=self.current_step
+        )
+
+    # -----------------------------
+    # CLOSE (SAFE)
+    # -----------------------------
     def close(self):
         pass
-        

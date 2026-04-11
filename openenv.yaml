@@ -1,40 +1,28 @@
-name: sociosync-env
-description: Workforce optimization RL environment with delayed effects and policy decisions
+name: rescuenet-env
+description: Disaster response resource allocation RL environment
 
 observation_space:
   type: object
   properties:
-    low_skill:
-      type: float
-    mid_skill:
-      type: float
-    high_skill:
-      type: float
-    unemployment_rate:
-      type: float
-    economic_growth:
-      type: float
-    inequality:
-      type: float
-    budget:
-      type: float
-    learning_efficiency:
-      type: float
-    project_exposure:
-      type: float
-    open_jobs:
+    regions:
+      type: array
+    available_resources:
+      type: array
+    time_step:
       type: integer
 
 action_space:
   type: object
   properties:
-    action_type:
+    region_id:
+      type: integer
+    resource_type:
       type: string
       enum:
-        - education_policy
-        - hiring_policy
-        - economic_policy
-    intensity:
+        - food
+        - medical
+        - rescue
+    quantity:
       type: float
 
 tasks:
@@ -42,34 +30,10 @@ tasks:
     entry_point: tasks:easy_1
     grader: grader:grade_environment
 
-  - name: easy_2
-    entry_point: tasks:easy_2
-    grader: grader:grade_environment
-
-  - name: easy_3
-    entry_point: tasks:easy_3
-    grader: grader:grade_environment
-
   - name: medium_1
     entry_point: tasks:medium_1
     grader: grader:grade_environment
 
-  - name: medium_2
-    entry_point: tasks:medium_2
-    grader: grader:grade_environment
-
-  - name: medium_3
-    entry_point: tasks:medium_3
-    grader: grader:grade_environment
-
   - name: hard_1
     entry_point: tasks:hard_1
-    grader: grader:grade_environment
-
-  - name: hard_2
-    entry_point: tasks:hard_2
-    grader: grader:grade_environment
-
-  - name: hard_3
-    entry_point: tasks:hard_3
     grader: grader:grade_environment
