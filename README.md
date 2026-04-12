@@ -19,7 +19,7 @@ tags:
 
 > **An OpenEnv-compliant RL environment where an AI agent plays the role of an emergency coordinator — dispatching scarce resources across disaster-struck regions to maximize population survival under time pressure.**
 
-🔗 **[Live Demo on Hugging Face Spaces](https://huggingface.co/spaces/Shwetuu28/rescuenet-env)** &nbsp;|&nbsp; **
+🔗 **[Live Demo on Hugging Face Spaces](https://huggingface.co/spaces/Shwetuu28/rescuenet-env)** 
 
 ---
 
