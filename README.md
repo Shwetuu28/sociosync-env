@@ -7,327 +7,344 @@ sdk: docker
 pinned: false
 tags:
   - openenv
+  - disaster-response
+  - resource-allocation
+  - reinforcement-learning
+  - real-world
 ---
- 
+
 # 🚨 RescueNet-Env
- 
+
 ### Disaster Response Resource Allocation — OpenEnv Hackathon Submission
- 
+
+> **An OpenEnv-compliant RL environment where an AI agent plays the role of an emergency coordinator — dispatching scarce resources across disaster-struck regions to maximize population survival under time pressure.**
+
+🔗 **[Live Demo on Hugging Face Spaces](https://huggingface.co/spaces/Shwetuu28/rescuenet-env)** &nbsp;|&nbsp; 🐙 **[GitHub](https://github.com/Shwetuu28/RescueNetEnv)**
+
 ---
- 
-## 🌍 Problem
- 
-When disasters strike — earthquakes, floods, epidemics — emergency responders must allocate limited resources (food, medical supplies, rescue teams) across multiple affected regions simultaneously. Every delayed decision costs lives.
- 
+
+## ⚡ Quick Start (No Setup Required)
+
+```bash
+# Reset the environment — get your first observation
+curl -X POST https://shwetuu28-rescuenetenv.hf.space/reset \
+     -H "Content-Type: application/json" -d '{}'
+
+# Take an action — dispatch medical supplies to region 2
+curl -X POST https://shwetuu28-rescuenetenv.hf.space/step \
+     -H "Content-Type: application/json" \
+     -d '{"region_id": 2, "resource_type": "medical", "quantity": 1.5}'
+
+# Check current state
+curl https://shwetuu28-rescuenetenv.hf.space/state
+```
+
+Or run the full inference loop locally in one command:
+
+```bash
+git clone https://github.com/Shwetuu28/RescueNetEnv.git && cd RescueNetEnv
+pip install -r requirements.txt
+python inference.py   # greedy fallback runs even without an API key
+```
+
+---
+
+## 💡 Why This Problem?
+
+When disasters strike — earthquakes, floods, epidemics — emergency responders must allocate scarce resources (food, medical supplies, rescue teams) across multiple affected regions simultaneously. Every delayed decision costs lives.
+
 This is a genuinely hard sequential decision-making problem:
- 
-- Resources are scarce and shared across competing regions
-- Severity changes over time — inaction compounds damage
-- Response delay increases mortality exponentially
+
+- Resources are **finite and shared** across competing regions
+- Severity evolves over time — inaction **compounds damage exponentially**
 - No single greedy strategy works across all scenarios
- 
-Real emergency management organizations face exactly this problem. **RescueNet-Env** simulates it as a reinforcement learning environment where agents must learn to dispatch resources intelligently under pressure.
- 
+- The hardest scenarios introduce **noisy sensor data** to simulate real-world information uncertainty
+
+Real emergency management agencies face exactly this problem. RescueNet-Env makes it a rigorous RL benchmark.
+
 ---
- 
-## 💡 Solution
- 
-**RescueNet-Env** is a fully OpenEnv-compliant RL environment where an AI agent acts as an emergency coordinator. At each timestep the agent selects a region and dispatches a resource. The environment tracks survival dynamics using an exponential decay model driven by severity and response delay.
- 
-The agent must learn to prioritize high-severity regions, minimize dispatch delay, and avoid wasting limited supplies — all simultaneously.
- 
----
- 
+
 ## 🧠 Environment Design
- 
+
 ### Survival Model
- 
-At every step, each region's alive population evolves as:
- 
+
+Population decay at each step follows an exponential model driven by severity and response delay:
+
 ```
 alive(t+1) = alive(t) × exp(−severity × delay)
 ```
- 
-Where `delay` increases by 1 each step a region goes without aid, and resets when resources are dispatched. This means inaction is never neutral — every missed step accelerates deaths.
- 
+
+`delay` increments every step a region receives no aid and resets on dispatch. Inaction is never neutral — every missed step accelerates deaths.
+
+### Agent Loop
+
+```
+env.reset()
+    │
+    ▼
+Observation ──► Agent (LLM or policy)
+                    │
+                    ▼ Action: {region_id, resource_type, quantity}
+                env.step(action)
+                    │
+                    ▼
+        reward + next Observation
+                    │
+              (repeat until done)
+                    │
+                    ▼
+            grader → score ∈ [0.01, 0.99]
+```
+
 ### Observation Space
- 
-```yaml
-regions:
-  - population: int        # initial population of the region
-    severity: float        # disaster severity in [0.0, 1.0]
-    delay: int             # steps since last resource dispatch
-    alive: float           # current surviving population
-available_resources:
-  - food: float            # remaining food supply
-  - medical: float         # remaining medical supply
-  - rescue: float          # remaining rescue supply
-time_step: int             # current step in episode
+
+```python
+class Region(BaseModel):
+    population: int            # initial population
+    severity: float            # disaster severity in [0.0, 1.0]
+    delay: int                 # steps since last dispatch
+    resource_need: List[float] # relative need for [food, medical, rescue]
+    alive: float               # surviving population estimate
+    sensor_note: Optional[str] # non-null on hard task: sensor data may be corrupted
+    phantom_note: Optional[str]# non-null on hard task: demand may be spurious
+
+class Observation(BaseModel):
+    regions: List[Region]
+    available_resources: List[float]  # remaining [food, medical, rescue]
+    time_step: int
 ```
- 
+
 ### Action Space
- 
-```yaml
-region_id: int             # index of region to dispatch to (0 to N-1)
-resource_type: string      # one of: "food", "medical", "rescue"
-quantity: float            # amount to dispatch in [0.0, 2.0]
+
+```python
+class Action(BaseModel):
+    region_id: int       # which region to dispatch to (0-indexed)
+    resource_type: str   # "food" | "medical" | "rescue"
+    quantity: float      # amount in [0.0, 2.0]
 ```
- 
+
 ### Reward Function
- 
-Each step:
- 
+
+Dense per-step reward — every step counts:
+
 ```
 reward = (Δalive / total_population) − 0.05 × (unused_resources / total_resources)
 ```
- 
-- **Primary signal:** change in total alive population (positive when agent saves lives, negative when population declines)
-- **Secondary penalty:** idle resources — hoarding supplies while people die is penalized
-- **Clipped** to `[−1.0, 1.0]` for training stability
- 
-This reward is **dense** — every step provides a meaningful signal, not just end-of-episode.
- 
+
+Clipped to `[−1.0, 1.0]`. Primary signal is the change in total surviving population. A secondary penalty discourages hoarding supplies while people die.
+
 ---
- 
+
 ## 🎮 Tasks
- 
-### 🟢 Easy — `easy_1`
- 
-| Property | Value |
-|---|---|
-| Regions | 5 |
-| Max Steps | 15 |
-| Severity Multiplier | 0.7× (reduced) |
-| Resources | 10 per type |
- 
-Full observability, lower severity, small map. A well-tuned greedy agent can achieve ~0.65–0.75. Designed to verify basic dispatch logic works.
- 
-### 🟡 Medium — `medium_1`
- 
-| Property | Value |
-|---|---|
-| Regions | 7 |
-| Max Steps | 20 |
-| Severity Multiplier | 1.0× (baseline) |
-| Resources | 10 per type |
- 
-More regions competing for the same resource budget. Agent must learn prioritization — dispatching to the wrong region costs survival in others. Greedy-by-severity performs suboptimally here.
- 
-### 🔴 Hard — `hard_1`
- 
-| Property | Value |
-|---|---|
-| Regions | 10 |
-| Max Steps | 25 |
-| Severity Multiplier | 1.3× (amplified) |
-| Resources | 6 per type (scarce) |
- 
-High-severity disasters across 10 regions with only 6 units per resource type. Agents must make true trade-off decisions — some regions will not receive aid. GPT-4-level greedy reasoning breaks down here because optimal allocation requires multi-step lookahead under scarcity.
- 
-### 📊 Baseline Scores (Greedy Fallback Agent)
- 
-| Task | Baseline Score | Success Threshold |
-|---|---|---|
-| easy_1 | ~0.68 | > 0.60 |
-| medium_1 | ~0.55 | > 0.60 |
-| hard_1 | ~0.38 | > 0.60 |
- 
+
+Three tasks with a clear easy → medium → hard progression, all defined in `tasks.py` and registered in `openenv.yaml`.
+
+### 🟢 `easy_1`
+
+| Regions | Max Steps | Severity | Resources |
+|---------|-----------|----------|-----------|
+| 5 | 15 | 0.7× | 10 per type |
+
+Full observability, lower severity. A well-tuned greedy agent scores ~0.68. Designed to confirm basic dispatch logic works.
+
+### 🟡 `medium_1`
+
+| Regions | Max Steps | Severity | Resources |
+|---------|-----------|----------|-----------|
+| 7 | 20 | 1.0× | 10 per type |
+
+More regions compete for the same resource budget. Greedy-by-severity underperforms — the agent must learn to prioritize.
+
+### 🔴 `hard_1`
+
+| Regions | Max Steps | Severity | Resources |
+|---------|-----------|----------|-----------|
+| 10 | 25 | 1.3× | 6 per type |
+
+Scarce resources across 10 high-severity regions. Some regions **will not receive aid** — optimal play requires multi-step lookahead and triage reasoning. The environment also introduces **corrupted sensor readings** (`sensor_note`) and **phantom demand signals** (`phantom_note`), so agents cannot blindly trust observations. Greedy agents score ~0.38 — well below the 0.60 success threshold.
+
+### 📊 Baseline Scores
+
+| Task | Baseline (Greedy) | Success Threshold |
+|------|-------------------|-------------------|
+| `easy_1` | ~0.68 | > 0.60 ✅ |
+| `medium_1` | ~0.55 | > 0.60 ❌ |
+| `hard_1` | ~0.38 | > 0.60 ❌ |
+
+The greedy policy passes easy but fails medium and hard — demonstrating that this is a genuine benchmark requiring learned behavior.
+
 ---
- 
+
 ## 🧪 Grader
- 
-The grader evaluates the final environment state after episode completion:
- 
+
+End-of-episode scoring from `grader.py`:
+
+```
+score = 0.5 × survival_rate
+      + 0.2 × efficiency        # tasks_completed / max_steps
+      + 0.2 × utilization       # resources used / resources available
+      − 0.1 × cost_penalty      # penalty for invalid allocations
+
+score clamped to [0.01, 0.99]   success = score > 0.6
+```
+
 ```python
-score = (
-    0.5 × survival_rate       # fraction of initial population still alive
-  + 0.2 × efficiency           # tasks_completed / max_steps
-  + 0.2 × utilization          # resources used / resources available
-  − 0.1 × cost_penalty         # penalty for invalid allocations
-)
+class GradeResult(BaseModel):
+    score: float          # final score in [0.01, 0.99]
+    success: bool         # True if score > 0.6
+    survival_rate: float
+    efficiency: float
+    utilization: float
+    cost_penalty: float
+    breakdown: str
 ```
- 
-All components normalized. Score clamped to `[0.01, 0.99]`. Success threshold: `score > 0.6`.
- 
+
 ---
- 
-## 🌐 API Endpoints
- 
-The environment exposes a FastAPI server on port `7860`:
- 
-### `POST /reset`
- 
-Resets the environment and returns the initial observation.
- 
-**Response:**
+
+## 🌐 API Reference
+
+The environment runs as a FastAPI server on port `7860`.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/reset` | POST | Reset environment, returns initial `Observation` |
+| `/step` | POST | Apply `Action`, returns `Observation`, reward, done |
+| `/state` | GET | Returns raw internal state dict |
+
+**Example `/step` request:**
 ```json
-{
-  "regions": [
-    { "population": 150, "severity": 0.82, "delay": 1, "alive": 150.0 }
-  ],
-  "available_resources": [10.0, 10.0, 10.0],
-  "time_step": 0
-}
+{ "region_id": 2, "resource_type": "medical", "quantity": 1.5 }
 ```
- 
-### `POST /step`
- 
-Applies an action and returns the next observation, reward, and done flag.
- 
-**Request:**
-```json
-{
-  "region_id": 2,
-  "resource_type": "medical",
-  "quantity": 1.5
-}
-```
- 
-**Response:**
+
+**Example `/step` response:**
 ```json
 {
   "observation": {
-    "regions": [...],
+    "regions": [{ "population": 150, "severity": 0.82, "delay": 1, "alive": 138.4, "resource_need": [1.0, 1.0, 1.0] }],
     "available_resources": [10.0, 8.5, 10.0],
     "time_step": 1
   },
   "reward": 0.14,
-  "done": false
+  "done": false,
+  "info": {}
 }
 ```
- 
+
 ---
- 
+
 ## 🤖 Inference Script
- 
-The agent uses an OpenAI-compatible client. If no API key is available, it falls back to a deterministic greedy policy (always dispatches medical to highest-severity region).
- 
-### Stdout Format (Strictly Compliant)
- 
+
+`inference.py` runs all three tasks in sequence, emitting strict `[START]` / `[STEP]` / `[END]` stdout logs. It uses an LLM if `HF_TOKEN` is set, otherwise falls back to a deterministic greedy policy — **the environment and grader work fully either way**.
+
 ```
 [START] task=easy_1 env=rescuenet-env model=gpt-4o-mini
- 
 [STEP] step=1 action=medical(r3,1.50) reward=0.12 done=false error=null
 [STEP] step=2 action=rescue(r0,1.00) reward=0.08 done=false error=null
 ...
- 
 [END] success=true steps=15 score=0.712 rewards=0.12,0.08,...
 ```
- 
-### Running Inference
- 
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_BASE_URL` | `https://api.openai.com/v1` | LLM API endpoint |
+| `MODEL_NAME` | `gpt-4o-mini` | Model identifier |
+| `HF_TOKEN` | — | API key (optional — greedy fallback runs if unset) |
+
 ```bash
-# With LLM agent
+# With LLM
 export API_BASE_URL=https://api.openai.com/v1
 export MODEL_NAME=gpt-4o-mini
-export HF_TOKEN=your_api_key
+export HF_TOKEN=your_key
 python inference.py
- 
-# Without API key (greedy fallback runs automatically)
-python inference.py
-```
- 
----
- 
-## 🚀 Local Setup
- 
-```bash
-# Clone the repo
-git clone https://huggingface.co/spaces/<your-username>/rescuenet-env
-cd rescuenet-env
- 
-# Install dependencies
-pip install -r requirements.txt
- 
-# Run the server
-python app.py
- 
-# Or run inference directly
+
+# Without API key — greedy fallback runs automatically
 python inference.py
 ```
- 
+
 ---
- 
+
 ## 🐳 Docker
- 
+
 ```bash
 # Build
 docker build -t rescuenet-env .
- 
+
 # Run server
 docker run -p 7860:7860 rescuenet-env
- 
+
 # Run inference inside container
 docker run \
   -e API_BASE_URL=https://api.openai.com/v1 \
   -e MODEL_NAME=gpt-4o-mini \
-  -e HF_TOKEN=your_api_key \
+  -e HF_TOKEN=your_key \
   rescuenet-env python inference.py
 ```
- 
+
 ---
- 
-## 🔑 Environment Variables
- 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `API_BASE_URL` | No | `https://api.openai.com/v1` | LLM API endpoint |
-| `MODEL_NAME` | No | `gpt-4o-mini` | Model identifier |
-| `HF_TOKEN` | No | — | Hugging Face / API key |
- 
-If `HF_TOKEN` is not set, the greedy fallback policy runs automatically — the environment and grader still function fully.
- 
----
- 
-## ✅ Pre-Submission Validation
- 
+
+## ✅ Validation
+
 ```bash
-# Install validator
 pip install openenv-core
- 
-# Run OpenEnv spec check
 openenv validate
- 
-# Run submission validator (replace URL with your HF Space URL)
-./validate-submission.sh https://your-space.hf.space .
+
+# Full submission check (replace with your HF Space URL)
+./validate-submission.sh https://shwetuu28-rescuenetenv.hf.space .
 ```
- 
+
 ---
- 
+
 ## 📁 Project Structure
- 
+
 ```
-rescuenet-env/
-├── app.py            # FastAPI server (POST /reset, POST /step)
-├── env.py            # RescueNetEnv — core RL environment
-├── models.py         # Typed models: Region, Observation, Action
+RescueNetEnv/
+├── server/           # FastAPI app — /reset, /step, /state endpoints
+├── env.py            # Core RL environment: survival model, step(), reset(), state()
+├── models.py         # Pydantic models: Region, Observation, Action, GradeResult
 ├── tasks.py          # Task factories: easy_1, medium_1, hard_1
-├── grader.py         # Scoring logic, normalized [0.01, 0.99]
-├── inference.py      # LLM agent + greedy fallback + stdout logging
-├── openenv.yaml      # OpenEnv spec metadata
-├── requirements.txt  # Python dependencies
-├── Dockerfile        # Container definition
-└── README.md         # This file
+├── grader.py         # End-of-episode scoring, normalized to [0.01, 0.99]
+├── inference.py      # LLM agent + greedy fallback + compliant stdout logging
+├── openenv.yaml      # OpenEnv spec: observation/action spaces, task registry
+├── requirements.txt
+├── Dockerfile
+└── README.md
 ```
- 
+
 ---
- 
-## 🏆 Why RescueNet-Env
- 
+
+## 🏆 What Makes This Stand Out
+
 | Property | Status |
 |---|---|
-| Real-world task (not a toy) | ✅ Disaster response coordination |
-| Dense reward signal | ✅ Per-step survival delta |
-| True difficulty progression | ✅ Severity × scarcity × region count |
-| Greedy agent fails on hard task | ✅ Score ~0.38 vs threshold 0.60 |
-| OpenEnv spec compliant | ✅ step / reset / state + openenv.yaml |
-| Reproducible with seeds | ✅ reset(seed=N) supported |
-| HF Spaces deployable | ✅ Docker + port 7860 |
-| LLM fallback safe | ✅ Greedy policy if no API key |
- 
+| Real-world task (not a toy) | ✅ Disaster triage — immediate RL/agent eval value |
+| Dense reward every step | ✅ Per-step survival delta, not sparse end-reward |
+| Genuine difficulty progression | ✅ Severity × scarcity × region count |
+| Greedy agent fails on medium/hard | ✅ Proves benchmark requires learned behavior |
+| Noisy observations on hard task | ✅ `sensor_note` + `phantom_note` — tests observation trust |
+| Seeded reproducibility | ✅ `reset(seed=N)` fully supported |
+| OpenEnv spec compliant | ✅ `step` / `reset` / `state` + `openenv.yaml` validated |
+| Safe without API key | ✅ Greedy fallback — no inference failure on missing token |
+| Docker + HF Spaces ready | ✅ Port 7860, containerized |
+
 ---
- 
+
 ## 👥 Team
- 
-- **Shweta** — RL Environment Design, Survival Model, Reward Engineering
-- **Ranjita** — API Integration, Deployment, Documentation
+
+- **Shweta** — RL environment design, survival model, reward engineering
+- **Ranjita** — API integration, deployment, documentation
+
+---
+
+## Citation
+
+```bibtex
+@software{rescuenetenv2026,
+  title   = {RescueNet-Env: Disaster Response Resource Allocation as an OpenEnv RL Benchmark},
+  author  = {Shweta and Ranjita},
+  year    = {2026},
+  url     = {https://huggingface.co/spaces/Shwetuu28/RescueNetEnv},
+  note    = {OpenEnv-compliant RL environment for disaster response agent evaluation}
+}
+```
