@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir fastapi uvicorn[standard] openenv-core openai pyd
 
 EXPOSE 7860
 
-CMD ["python", "app.py"]
+CMD ["python", "server/app.py"]
