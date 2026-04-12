@@ -70,6 +70,9 @@ def step(req: StepRequest):
         "done": done
     }
 
+@app.get("/state")
+def state():
+    return env.state()
 
 # -----------------------------
 # ENTRY POINT

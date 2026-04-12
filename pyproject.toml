@@ -19,4 +19,5 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["."]
+packages = ["rescuenet_env"]
+package-dir = {"rescuenet_env" = "."}

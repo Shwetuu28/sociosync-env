@@ -37,3 +37,8 @@ tasks:
   - name: hard_1
     entry_point: tasks:hard_1
     grader: grader:grade_environment
+
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state

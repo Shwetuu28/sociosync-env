@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RescueNet-Env — Live Demo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff; --bg2: #f5f5f3; --bg3: #eeece6;
+  --text: #1a1a1a; --text2: #6b6b68; --text3: #9a9895;
+  --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+  --green: #1D9E75; --green-bg: #E1F5EE; --green-text: #085041;
+  --amber: #BA7517; --amber-bg: #FAEEDA; --amber-text: #633806;
+  --red: #E24B4A; --red-bg: #FCEBEB; --red-text: #791F1F;
+  --blue: #378ADD; --blue-bg: #E6F1FB; --blue-text: #0C447C;
+  --radius: 8px; --radius-lg: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1a; --bg2: #252523; --bg3: #2e2e2b;
+    --text: #f0ede8; --text2: #9a9895; --text3: #6b6b68;
+    --border: rgba(255,255,255,0.12); --border2: rgba(255,255,255,0.22);
+  }
+}
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg3); color: var(--text); min-height: 100vh; }
+header { background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+header h1 { font-size: 16px; font-weight: 500; }
+header p { font-size: 13px; color: var(--text2); }
+.container { max-width: 960px; margin: 0 auto; padding: 20px 16px; }
+.top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.pills { display: flex; gap: 6px; }
+.pill { font-size: 12px; padding: 4px 14px; border-radius: 20px; border: 0.5px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; font-family: inherit; }
+.pill.active      { background: var(--green-bg); color: var(--green-text); border-color: var(--green); }
+.pill.active.medium { background: var(--amber-bg); color: var(--amber-text); border-color: var(--amber); }
+.pill.active.hard   { background: var(--red-bg);   color: var(--red-text);   border-color: var(--red); }
+.btn { font-size: 13px; padding: 7px 16px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: transparent; color: var(--text); cursor: pointer; font-family: inherit; }
+.btn:hover { background: var(--bg2); }
+.btn.primary { background: var(--green); color: var(--green-bg); border-color: var(--green); }
+.btn.primary:hover { background: #0F6E56; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-bottom: 16px; }
+.metric { background: var(--bg2); border-radius: var(--radius); padding: 12px 14px; }
+.metric-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+.metric-val { font-size: 22px; font-weight: 500; }
+.metric-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.main { display: grid; grid-template-columns: 1fr 280px; gap: 12px; align-items: start; }
+@media (max-width: 680px) { .main { grid-template-columns: 1fr; } .metrics { grid-template-columns: repeat(2,1fr); } }
+.regions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.region-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 12px; cursor: pointer; transition: border-color 0.15s; }
+.region-card:hover { border-color: var(--border2); }
+.region-card.critical { border-left: 3px solid var(--red); border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
+.region-card.noisy { border-left: 3px solid var(--amber); border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
+.r-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 4px; flex-wrap: wrap; }
+.r-name { font-size: 13px; font-weight: 500; }
+.r-badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 500; white-space: nowrap; }
+.sev-high { background: var(--red-bg);   color: var(--red-text); }
+.sev-mid  { background: var(--amber-bg); color: var(--amber-text); }
+.sev-low  { background: var(--green-bg); color: var(--green-text); }
+.noise-badge { font-size: 10px; background: var(--amber-bg); color: var(--amber-text); padding: 1px 5px; border-radius: 6px; margin-left: 4px; }
+.bar-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.bar-label { font-size: 11px; color: var(--text2); width: 42px; flex-shrink: 0; }
+.bar-track { flex: 1; height: 5px; background: var(--bg2); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+.bar-val { font-size: 11px; color: var(--text2); width: 32px; text-align: right; flex-shrink: 0; }
+.delay-badge { font-size: 11px; color: var(--text3); margin-top: 4px; }
+.sidebar { display: flex; flex-direction: column; gap: 10px; }
+.panel { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+.panel-title { font-size: 11px; font-weight: 500; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.res-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.res-label { font-size: 13px; width: 52px; }
+.res-track { flex: 1; height: 7px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+.res-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+.res-val { font-size: 12px; color: var(--text2); width: 30px; text-align: right; }
+.dispatch-row { display: flex; flex-direction: column; gap: 9px; }
+.select-label { font-size: 12px; color: var(--text2); margin-bottom: 3px; }
+select { width: 100%; padding: 6px 8px; font-size: 13px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg); color: var(--text); font-family: inherit; }
+.qty-row { display: flex; align-items: center; gap: 8px; }
+input[type=range] { flex: 1; accent-color: var(--green); }
+.chart-wrap { position: relative; height: 110px; }
+.log-box { max-height: 120px; overflow-y: auto; font-size: 11px; font-family: 'Courier New', monospace; color: var(--text2); line-height: 1.6; }
+.log-entry { padding: 1px 0; border-bottom: 0.5px solid var(--border); }
+.log-entry:last-child { border-bottom: none; }
+.log-good { color: var(--green-text); }
+.log-bad  { color: var(--red-text); }
+.log-warn { color: var(--amber-text); }
+.done-banner { border-radius: var(--radius-lg); margin-top: 14px; border: 0.5px solid var(--border); overflow: hidden; }
+.done-banner.success { border-color: var(--green); }
+.done-banner.fail    { border-color: var(--red); }
+.done-head { padding: 12px 16px; font-size: 13px; font-weight: 500; }
+.done-banner.success .done-head { background: var(--green-bg); color: var(--green-text); }
+.done-banner.fail    .done-head { background: var(--red-bg);   color: var(--red-text); }
+.done-body { padding: 14px 16px; background: var(--bg); display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+@media (max-width: 600px) { .done-body { grid-template-columns: repeat(2,1fr); } }
+.done-metric { display: flex; flex-direction: column; gap: 3px; }
+.done-metric-label { font-size: 11px; color: var(--text2); }
+.done-metric-val { font-size: 18px; font-weight: 500; }
+.done-metric-weight { font-size: 11px; color: var(--text3); }
+.done-formula { padding: 10px 16px; background: var(--bg2); font-size: 11px; color: var(--text2); font-family: 'Courier New', monospace; border-top: 0.5px solid var(--border); line-height: 1.6; }
+footer { text-align: center; font-size: 12px; color: var(--text3); padding: 24px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>RescueNet-Env — Live Demo</h1>
+    <p>Disaster response resource allocation · OpenEnv hackathon submission</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="top-bar">
+    <div class="pills">
+      <button class="pill active" id="pill-easy"   onclick="setTask('easy')">easy</button>
+      <button class="pill medium" id="pill-medium" onclick="setTask('medium')">medium</button>
+      <button class="pill hard"   id="pill-hard"   onclick="setTask('hard')">hard</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" id="btn-auto" onclick="toggleAuto()">auto-play</button>
+      <button class="btn primary" id="btn-reset" onclick="initEnv()">reset</button>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">step</div><div class="metric-val" id="m-step">0</div><div class="metric-sub" id="m-maxstep">/ 15</div></div>
+    <div class="metric"><div class="metric-label">alive</div><div class="metric-val" id="m-alive">—</div><div class="metric-sub" id="m-pop">total —</div></div>
+    <div class="metric"><div class="metric-label">survival</div><div class="metric-val" id="m-surv">—%</div><div class="metric-sub">current rate</div></div>
+    <div class="metric"><div class="metric-label">episode score</div><div class="metric-val" id="m-score">—</div><div class="metric-sub" id="m-success"></div></div>
+  </div>
+
+  <div class="main">
+    <div class="regions-grid" id="regions-grid"></div>
+    <div class="sidebar">
+
+      <div class="panel">
+        <div class="panel-title">resources remaining</div>
+        <div class="res-row"><div class="res-label">food</div><div class="res-track"><div class="res-fill" id="rf-food" style="background:#639922;width:100%"></div></div><div class="res-val" id="rv-food">10.0</div></div>
+        <div class="res-row"><div class="res-label">medical</div><div class="res-track"><div class="res-fill" id="rf-med" style="background:#378ADD;width:100%"></div></div><div class="res-val" id="rv-med">10.0</div></div>
+        <div class="res-row"><div class="res-label">rescue</div><div class="res-track"><div class="res-fill" id="rf-res" style="background:#D85A30;width:100%"></div></div><div class="res-val" id="rv-res">10.0</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">dispatch action</div>
+        <div class="dispatch-row">
+          <div><div class="select-label">region</div><select id="sel-region"></select></div>
+          <div><div class="select-label">resource type</div>
+            <select id="sel-type">
+              <option value="medical">medical</option>
+              <option value="food">food</option>
+              <option value="rescue">rescue</option>
+            </select>
+          </div>
+          <div>
+            <div class="select-label">quantity: <span id="qty-out">1.0</span></div>
+            <div class="qty-row">
+              <input type="range" min="1" max="20" step="1" value="10" id="qty-slider" oninput="document.getElementById('qty-out').textContent=(this.value/10).toFixed(1)">
+            </div>
+          </div>
+          <button class="btn primary" id="btn-dispatch" onclick="doDispatch()" style="width:100%">dispatch</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">survival over time</div>
+        <div class="chart-wrap">
+          <canvas id="surv-chart" role="img" aria-label="Line chart showing survival rate over episode steps">Survival rate over time.</canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">step log</div>
+        <div class="log-box" id="log-box"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="done-banner" style="display:none"></div>
+
+  <footer>
+    RescueNet-Env · survival model: alive(t+1) = alive(t) × exp(−severity × delay) ·
+    reward = Δalive/pop + triage_bonus − idle_penalty − delay_penalty
+  </footer>
+</div>
+
+<script>
+var ENV=null,survChart=null,autoTimer=null,autoRunning=false,currentTask='easy';
+var TASK_CFG={
+  easy:  {maxSteps:15,numRegions:5, sevMult:0.7,baseRes:10,noiseOn:false},
+  medium:{maxSteps:20,numRegions:7, sevMult:1.0,baseRes:10,noiseOn:false},
+  hard:  {maxSteps:25,numRegions:10,sevMult:1.3,baseRes:6, noiseOn:true }
+};
+function seededRng(seed){var s=seed;return function(){s=(s*1664525+1013904223)&0xffffffff;return(s>>>0)/4294967296;};}
+function setTask(t){
+  currentTask=t;
+  ['easy','medium','hard'].forEach(function(x){
+    var p=document.getElementById('pill-'+x);
+    p.className='pill'+(x===t?' active '+x:'');
+  });
+  initEnv();
+}
+function initEnv(){
+  stopAuto();
+  var cfg=TASK_CFG[currentTask],rng=seededRng(42),regions=[],totalPop=0;
+  for(var i=0;i<cfg.numRegions;i++){
+    var pop=Math.floor(rng()*150)+50;
+    var sev=parseFloat((Math.min(1,rng()*0.9*cfg.sevMult+0.1)).toFixed(2));
+    regions.push({id:i,name:'Region '+String.fromCharCode(65+i),population:pop,severity:sev,reportedSev:sev,delay:1,alive:pop,resourceNeed:[1,1,1],sensorNote:null,phantomNote:null});
+    totalPop+=pop;
+  }
+  if(cfg.noiseOn&&regions.length>=3){
+    var r0=regions[Math.floor(rng()*regions.length)];
+    r0.reportedSev=parseFloat(Math.min(1,r0.severity+0.3).toFixed(2));r0.sensorNote='sensor spike';
+    var r1=regions[(r0.id+1)%regions.length];r1.resourceNeed[1]=3.0;r1.phantomNote='unverified surge';
+  }
+  ENV={cfg:cfg,regions:regions,totalPop:totalPop,resources:[cfg.baseRes,cfg.baseRes,cfg.baseRes],step:0,done:false,rewardHistory:[],survHistory:[],usedRes:0,totalRes:cfg.baseRes*3,tasksCompleted:0,totalCost:0};
+  buildRegionSelect();renderAll();initChart();
+  document.getElementById('log-box').innerHTML='';
+  document.getElementById('done-banner').style.display='none';
+  document.getElementById('btn-dispatch').disabled=false;
+  document.getElementById('btn-auto').disabled=false;
+  addLog('Episode started — '+currentTask+' task','');
+}
+function buildRegionSelect(){
+  var sel=document.getElementById('sel-region');sel.innerHTML='';
+  ENV.regions.forEach(function(r){var o=document.createElement('option');o.value=r.id;o.textContent=r.name+' (sev='+r.reportedSev.toFixed(2)+')';sel.appendChild(o);});
+}
+function initChart(){
+  if(survChart){survChart.destroy();survChart=null;}
+  var ctx=document.getElementById('surv-chart').getContext('2d');
+  survChart=new Chart(ctx,{type:'line',data:{labels:['start'],datasets:[{label:'survival %',data:[100],borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.08)',fill:true,tension:0.3,pointRadius:2,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}},grid:{display:false}},y:{min:0,max:100,ticks:{font:{size:10},callback:function(v){return v+'%'}},grid:{color:'rgba(128,128,128,0.1)'}}} }});
+}
+function doStep(auto){
+  if(!ENV||ENV.done)return;
+  var regionId,resType,qty;
+  if(auto){
+    var best=-1,bestIdx=0;
+    ENV.regions.forEach(function(r,i){if(r.alive>0){var u=r.severity*r.delay;if(u>best){best=u;bestIdx=i;}}});
+    regionId=bestIdx;
+    var need=ENV.regions[bestIdx].resourceNeed,maxN=Math.max.apply(null,need);
+    resType=['food','medical','rescue'][need.indexOf(maxN)];
+    qty=parseFloat(Math.min(1.0,ENV.resources[['food','medical','rescue'].indexOf(resType)]).toFixed(1));
+  } else {
+    regionId=parseInt(document.getElementById('sel-region').value);
+    resType=document.getElementById('sel-type').value;
+    qty=parseFloat((parseInt(document.getElementById('qty-slider').value)/10).toFixed(1));
+  }
+  var rIdx={'food':0,'medical':1,'rescue':2}[resType],region=ENV.regions[regionId],error=null;
+  if(ENV.resources[rIdx]>=qty&&qty>0){ENV.resources[rIdx]-=qty;ENV.usedRes+=qty;region.delay=Math.max(1,region.delay-1);ENV.tasksCompleted++;}
+  else if(qty>ENV.resources[rIdx]){ENV.totalCost+=0.05;error='insufficient resources';}
+  var prevAlive=ENV.regions.reduce(function(a,r){return a+r.alive;},0);
+  var maxTrueSev=Math.max.apply(null,ENV.regions.map(function(r){return r.severity;}));
+  ENV.regions.forEach(function(r){r.alive=Math.max(0,r.alive*Math.exp(-r.severity*r.delay));r.delay++;});
+  var newAlive=ENV.regions.reduce(function(a,r){return a+r.alive;},0);
+  var delta=(newAlive-prevAlive)/ENV.totalPop;
+  var bonus=region.severity>=maxTrueSev-0.05?0.05:0;
+  var idle=0.05*ENV.resources.reduce(function(a,x){return a+x;},0)/(ENV.totalRes+1e-6);
+  var maxD=Math.max.apply(null,ENV.regions.map(function(r){return r.delay;}));
+  var reward=Math.max(-1,Math.min(1,delta+bonus-idle-0.02*Math.min(maxD,10)/10));
+  ENV.step++;ENV.rewardHistory.push(reward);ENV.survHistory.push(newAlive);
+  var survPct=newAlive/ENV.totalPop*100;
+  ENV.done=ENV.step>=ENV.cfg.maxSteps;
+  addLog('step '+ENV.step+': '+resType+'(r'+regionId+','+qty+') → '+reward.toFixed(2)+(error?' ['+error+']':''),reward>=0?'good':(error?'warn':'bad'));
+  renderAll();updateChart(survPct);
+  if(ENV.done)finishEpisode();
+}
+function finishEpisode(){
+  stopAuto();
+  var survRate=ENV.regions.reduce(function(a,r){return a+r.alive;},0)/ENV.totalPop;
+  var eff=ENV.tasksCompleted/ENV.cfg.maxSteps;
+  var util=ENV.usedRes/(ENV.totalRes+1e-6);
+  var cost=Math.max(0.01,Math.min(0.99,ENV.totalCost));
+  var raw=0.5*survRate+0.2*eff+0.2*util-0.1*cost;
+  var score=Math.max(0.01,Math.min(0.99,raw));
+  var success=score>0.6;
+
+  document.getElementById('m-score').textContent=score.toFixed(3);
+  document.getElementById('m-success').textContent=success?'success':'below threshold';
+
+  var scoreCol=success?'var(--green)':score>0.4?'var(--amber)':'var(--red)';
+  var formula=(survRate*0.5).toFixed(3)+' + '+(eff*0.2).toFixed(3)+' + '+(util*0.2).toFixed(3)+' − '+(cost*0.1).toFixed(3)+' = '+score.toFixed(3);
+
+  var b=document.getElementById('done-banner');
+  b.style.display='block';
+  b.className='done-banner '+(success?'success':'fail');
+  b.innerHTML=
+    '<div class="done-head">Episode complete — '+(success?'success ✓ (score > 0.60)':'below threshold (score ≤ 0.60)')+'</div>'+
+    '<div class="done-body">'+
+      '<div class="done-metric">'+
+        '<div class="done-metric-label">survival rate</div>'+
+        '<div class="done-metric-val" style="color:'+(survRate>0.6?'var(--green)':survRate>0.35?'var(--amber)':'var(--red)')+'">'+( survRate*100).toFixed(1)+'%</div>'+
+        '<div class="done-metric-weight">× 0.50 weight</div>'+
+      '</div>'+
+      '<div class="done-metric">'+
+        '<div class="done-metric-label">efficiency</div>'+
+        '<div class="done-metric-val" style="color:'+(eff>0.6?'var(--green)':eff>0.35?'var(--amber)':'var(--red)')+'">'+( eff*100).toFixed(1)+'%</div>'+
+        '<div class="done-metric-weight">× 0.20 weight</div>'+
+      '</div>'+
+      '<div class="done-metric">'+
+        '<div class="done-metric-label">utilization</div>'+
+        '<div class="done-metric-val" style="color:'+(util>0.6?'var(--green)':util>0.35?'var(--amber)':'var(--red)')+'">'+( util*100).toFixed(1)+'%</div>'+
+        '<div class="done-metric-weight">× 0.20 weight</div>'+
+      '</div>'+
+      '<div class="done-metric">'+
+        '<div class="done-metric-label">final score</div>'+
+        '<div class="done-metric-val" style="color:'+scoreCol+'">'+score.toFixed(3)+'</div>'+
+        '<div class="done-metric-weight">threshold: 0.60</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="done-formula">grader.py: 0.50×survival + 0.20×efficiency + 0.20×utilization − 0.10×cost_penalty = '+formula+'</div>';
+
+  document.getElementById('btn-dispatch').disabled=true;
+  document.getElementById('btn-auto').disabled=true;
+}
+function renderAll(){
+  if(!ENV)return;
+  var totalAlive=ENV.regions.reduce(function(a,r){return a+r.alive;},0),survPct=totalAlive/ENV.totalPop*100;
+  document.getElementById('m-step').textContent=ENV.step;
+  document.getElementById('m-maxstep').textContent='/ '+ENV.cfg.maxSteps;
+  document.getElementById('m-alive').textContent=Math.round(totalAlive);
+  document.getElementById('m-pop').textContent='of '+ENV.totalPop+' total';
+  document.getElementById('m-surv').textContent=survPct.toFixed(1)+'%';
+  var maxR=ENV.cfg.baseRes;
+  [['food','rf-food','rv-food'],['medical','rf-med','rv-med'],['rescue','rf-res','rv-res']].forEach(function(x,i){
+    document.getElementById(x[1]).style.width=(ENV.resources[i]/maxR*100).toFixed(0)+'%';
+    document.getElementById(x[2]).textContent=ENV.resources[i].toFixed(1);
+  });
+  var grid=document.getElementById('regions-grid'),maxSev=Math.max.apply(null,ENV.regions.map(function(r){return r.reportedSev;}));
+  grid.innerHTML='';
+  ENV.regions.forEach(function(r){
+    var ap=r.alive/r.population*100,sc=r.reportedSev>=0.7?'sev-high':r.reportedSev>=0.4?'sev-mid':'sev-low',sl=r.reportedSev>=0.7?'high':r.reportedSev>=0.4?'mid':'low';
+    var isCrit=r.reportedSev>=0.7&&r.delay>=3,noiseH=(r.sensorNote?'<span class="noise-badge">sensor?</span>':'')+(r.phantomNote?'<span class="noise-badge">phantom?</span>':'');
+    var card=document.createElement('div');
+    card.className='region-card'+(isCrit?' critical':'')+(r.sensorNote?' noisy':'');
+    card.onclick=function(){document.getElementById('sel-region').value=r.id;};
+    var barCol=ap>60?'#1D9E75':ap>30?'#BA7517':'#E24B4A';
+    card.innerHTML='<div class="r-header"><span class="r-name">'+r.name+noiseH+'</span><span class="r-badge '+sc+'">'+sl+' '+r.reportedSev.toFixed(2)+'</span></div>'+
+      '<div class="bar-row"><div class="bar-label">alive</div><div class="bar-track"><div class="bar-fill" style="width:'+ap.toFixed(0)+'%;background:'+barCol+'"></div></div><div class="bar-val">'+Math.round(r.alive)+'</div></div>'+
+      '<div class="bar-row"><div class="bar-label">severity</div><div class="bar-track"><div class="bar-fill" style="width:'+(r.reportedSev*100).toFixed(0)+'%;background:#E24B4A"></div></div><div class="bar-val">'+r.reportedSev.toFixed(2)+'</div></div>'+
+      '<div class="delay-badge">delay: '+r.delay+' steps without aid</div>';
+    grid.appendChild(card);
+  });
+  document.getElementById('btn-dispatch').disabled=ENV.done;
+}
+function updateChart(pct){
+  if(!survChart)return;
+  survChart.data.labels.push('s'+ENV.step);
+  survChart.data.datasets[0].data.push(parseFloat(pct.toFixed(1)));
+  survChart.update('none');
+}
+function addLog(msg,cls){
+  var box=document.getElementById('log-box'),d=document.createElement('div');
+  d.className='log-entry'+(cls==='good'?' log-good':cls==='bad'?' log-bad':cls==='warn'?' log-warn':'');
+  d.textContent=msg;box.insertBefore(d,box.firstChild);
+}
+function doDispatch(){doStep(false);}
+function toggleAuto(){autoRunning?stopAuto():startAuto();}
+function startAuto(){
+  if(ENV.done)return;
+  autoRunning=true;document.getElementById('btn-auto').textContent='stop';
+  autoTimer=setInterval(function(){if(!ENV||ENV.done){stopAuto();return;}doStep(true);},700);
+}
+function stopAuto(){
+  autoRunning=false;if(autoTimer){clearInterval(autoTimer);autoTimer=null;}
+  document.getElementById('btn-auto').textContent='auto-play';
+}
+initEnv();
+</script>
+</body>
+</html>
