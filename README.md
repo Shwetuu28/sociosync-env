@@ -21,31 +21,6 @@ tags:
 
 🔗 **[Live Demo on Hugging Face Spaces](https://huggingface.co/spaces/Shwetuu28/rescuenet-env)** 
 
----
-
-## ⚡ Quick Start (No Setup Required)
-
-```bash
-# Reset the environment — get your first observation
-curl -X POST https://shwetuu28-rescuenetenv.hf.space/reset \
-     -H "Content-Type: application/json" -d '{}'
-
-# Take an action — dispatch medical supplies to region 2
-curl -X POST https://shwetuu28-rescuenetenv.hf.space/step \
-     -H "Content-Type: application/json" \
-     -d '{"region_id": 2, "resource_type": "medical", "quantity": 1.5}'
-
-# Check current state
-curl https://shwetuu28-rescuenetenv.hf.space/state
-```
-
-Or run the full inference loop locally in one command:
-
-```bash
-git clone https://github.com/Shwetuu28/RescueNetEnv.git && cd RescueNetEnv
-pip install -r requirements.txt
-python inference.py   # greedy fallback runs even without an API key
-```
 
 ---
 
